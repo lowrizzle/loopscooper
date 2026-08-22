@@ -149,6 +149,7 @@ function handleFile(file) {
 }
 
 let playingLoopIndex = null;
+let playingMode = null; // 'play' (one-shot) or 'loop'
 
 function displayResults(data) {
     loading.classList.add('hidden');
@@ -185,9 +186,6 @@ function renderLoopPage() {
         row.dataset.index = loop.index;
         row.dataset.startSec = loop.loop_start_sec;
         row.dataset.endSec = loop.loop_end_sec;
-        if (loop.index === playingLoopIndex) {
-            row.classList.add('playing');
-        }
         let typeLabel = '?';
         if (loop.loop_type === 'one_bar') {
             typeLabel = '1 Bar';
@@ -203,27 +201,46 @@ function renderLoopPage() {
         row.innerHTML = `
             <td><input type="checkbox" name="export-loop" value="${loop.index}" ${checkedAttr}></td>
             <td>${loop.index}</td>
+            <td class="transport-cell">
+                <button type="button" class="transport-btn play-btn" aria-label="Play once">▶</button>
+                <button type="button" class="transport-btn loop-btn" aria-label="Loop">⟲</button>
+            </td>
             <td>${loop.start_time}</td>
             <td>${loop.end_time}</td>
             <td>${loop.length}</td>
             <td><span class="loop-type-badge ${typeClass}">${typeLabel}</span></td>
             <td class="score-cell">${loop.score.toFixed(2)}</td>
         `;
+        if (loop.index === playingLoopIndex) {
+            setRowPlaying(row, playingMode);
+        }
         loopsTbody.appendChild(row);
     });
 
-    loopsTbody.querySelectorAll('tr[data-index]').forEach(row => {
-        row.addEventListener('click', (e) => {
-            if (e.target.type === 'checkbox') return;
-
+    loopsTbody.querySelectorAll('.play-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const row = btn.closest('tr');
             const idx = parseInt(row.dataset.index);
-            const startSec = parseFloat(row.dataset.startSec);
-            const endSec = parseFloat(row.dataset.endSec);
 
-            if (playingLoopIndex === idx) {
+            if (playingLoopIndex === idx && playingMode === 'play') {
                 stopPreview();
             } else {
-                playLoop(idx, startSec, endSec, row);
+                playLoop(idx, parseFloat(row.dataset.startSec), parseFloat(row.dataset.endSec), 'play', row);
+            }
+        });
+    });
+
+    loopsTbody.querySelectorAll('.loop-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const row = btn.closest('tr');
+            const idx = parseInt(row.dataset.index);
+
+            if (playingLoopIndex === idx && playingMode === 'loop') {
+                stopPreview();
+            } else {
+                playLoop(idx, parseFloat(row.dataset.startSec), parseFloat(row.dataset.endSec), 'loop', row);
             }
         });
     });
@@ -284,7 +301,42 @@ function getDecodedBuffer() {
     return decodePromise;
 }
 
-function playLoop(index, startSec, endSec, row) {
+// Marks a row (and its play/loop button) as the active player. The play button's
+// glyph swaps to a stop square, matching the standard play/stop transport affordance;
+// the loop button just gets an active glow since "loop" doesn't have an obvious
+// paired icon.
+function setRowPlaying(row, mode) {
+    row.classList.add('playing');
+    const playBtn = row.querySelector('.play-btn');
+    const loopBtn = row.querySelector('.loop-btn');
+    if (mode === 'play') {
+        if (playBtn) {
+            playBtn.classList.add('active');
+            playBtn.textContent = '■';
+        }
+    } else if (mode === 'loop' && loopBtn) {
+        loopBtn.classList.add('active');
+    }
+}
+
+function clearRowPlaying(index) {
+    const row = loopsTbody.querySelector(`tr[data-index="${index}"]`);
+    if (!row) return;
+    row.classList.remove('playing');
+    const playBtn = row.querySelector('.play-btn');
+    const loopBtn = row.querySelector('.loop-btn');
+    if (playBtn) {
+        playBtn.classList.remove('active');
+        playBtn.textContent = '▶';
+    }
+    if (loopBtn) {
+        loopBtn.classList.remove('active');
+    }
+}
+
+// mode: 'play' plays the loop section through once and stops on its own (handy for
+// recording straight into a hardware sampler); 'loop' repeats it until stopped.
+function playLoop(index, startSec, endSec, mode, row) {
     stopPreview();
 
     if (!audioBlobUrl) {
@@ -297,7 +349,8 @@ function playLoop(index, startSec, endSec, row) {
     // by the caller instead of racing to start a second, independent playback.
     const myToken = ++playToken;
     playingLoopIndex = index;
-    row.classList.add('playing');
+    playingMode = mode;
+    setRowPlaying(row, mode);
 
     getDecodedBuffer().then((audioBuffer) => {
         if (myToken !== playToken) return; // superseded by a newer play/stop request
@@ -313,11 +366,25 @@ function playLoop(index, startSec, endSec, row) {
         source.buffer = audioBuffer;
         source.connect(ctx.destination);
 
-        source.loop = true;
-        source.loopStart = startSec;
-        source.loopEnd = endSec;
+        if (mode === 'loop') {
+            source.loop = true;
+            source.loopStart = startSec;
+            source.loopEnd = endSec;
+            source.start(0, startSec);
+        } else {
+            // Play the loop section through exactly once, then stop on its own.
+            source.start(0, startSec, Math.max(0, endSec - startSec));
+        }
 
-        source.start(0, startSec);
+        // Fires on natural completion (one-shot mode) as well as on an explicit
+        // .stop() call, so this also cleans up the row highlighting when the user
+        // starts a different loop while this one is still playing.
+        source.onended = () => {
+            if (myToken === playToken) {
+                stopPreview();
+            }
+        };
+
         currentSource = source;
     }).catch(err => {
         console.error('Decode failed:', err);
@@ -339,12 +406,10 @@ function stopPreview() {
         currentSource = null;
     }
     if (playingLoopIndex !== null) {
-        const playingRow = loopsTbody.querySelector(`tr[data-index="${playingLoopIndex}"]`);
-        if (playingRow) {
-            playingRow.classList.remove('playing');
-        }
+        clearRowPlaying(playingLoopIndex);
     }
     playingLoopIndex = null;
+    playingMode = null;
 }
 
 function exportSelectedLoops() {

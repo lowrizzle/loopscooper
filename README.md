@@ -13,7 +13,8 @@ Drag a song into Loopscooper and it finds the most likely beat drops — 2-bar a
 - **Auto-detect musical key** — uses the Krumhansl-Schmuckler algorithm to determine the track's key
 - **Beat-locked detection** — anchors candidates to actually-detected beats an exact beat-count apart (not just a duration window), so loops start and end on the beat instead of merely being close to the right length
 - **2-bar / 4-bar first** — 1-bar loops are short enough to sound incomplete, so they're only surfaced when the chroma/loudness match scores 90% or higher
-- **Instant preview** — click any loop to hear it loop back-to-back in the browser, click again to stop
+- **Play / Loop preview** — each candidate has its own ▶ (play once) and ⟲ (loop) buttons; ▶ plays the loop section through exactly once and stops on its own, ⟲ repeats it until you press it again. Pressing either button again while it's playing stops it.
+- **Sample straight into hardware** — since ▶ plays the loop exactly once, you can arm a hardware sampler (e.g. an Akai MPC or Roland SP-404) to record and hit ▶ to capture a perfectly-timed one-shot with no manual trimming. This works especially well with USB-C audio class-compliant samplers like the MPC Sample, which can take the browser's audio output directly from an iPad — no export/transfer step needed.
 - **Paginated results** — candidates are sorted best-first and shown 8 per page, so a track with hundreds of candidates doesn't turn into an endless scroll
 - **Export as ZIP** — select loops across any page and download them as a ready-to-use sample pack
 - **Load a new file without reloading** — the eject button next to the display resets the session in place
@@ -119,11 +120,10 @@ Successfully exported 9 loop(s) to song-samples/
 1. **Drag & drop** or click to select an audio file
 2. Analysis runs automatically — the display shows filename, duration, BPM, and key
 3. Loop candidates are shown in a table with Type badges (1 Bar / 2 Bars / 4 Bars), sorted best-first, 8 per page — use **Prev / Next** to page through the rest
-4. **Click any row** to preview that loop (plays loop section only, no intro)
-5. **Click the same row again** to stop previewing
-6. **Check boxes** next to loops you want to export — selections are kept when you change pages
-7. Click **Export Selected** to download a ZIP of the chosen loops
-8. Click the **⏏ eject button** next to the display to load a different file without reloading the page
+4. Click **▶** to play a candidate's loop section through once (great for capturing a one-shot into a hardware sampler), or **⟲** to loop it continuously — press the same button again to stop
+5. **Check boxes** next to loops you want to export — selections are kept when you change pages
+6. Click **Export Selected** to download a ZIP of the chosen loops
+7. Click the **⏏ eject button** next to the display to load a different file without reloading the page
 
 ### Output
 

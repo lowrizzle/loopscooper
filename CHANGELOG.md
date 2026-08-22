@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Web interface** — drag-and-drop audio upload, BPM/key detection, loop preview (click row to play/stop), export as ZIP
+- **Web interface** — drag-and-drop audio upload, BPM/key detection, per-candidate play-once/loop preview, export as ZIP
 - **Key detection** — Krumhansl-Schmuckler algorithm detects musical key (24 major/minor profiles)
 - **Dual interfaces** — CLI (`loopscooper`) and web (`http://localhost:8282`)
+- **Play / Loop buttons per candidate** — ▶ plays the loop section through exactly once and stops on its own (useful for recording a one-shot straight into a hardware sampler like an MPC Sample or SP-404), ⟲ repeats it until pressed again; replaces the old whole-row click-to-loop behavior
 - **Paginated loop candidates** — 8 per page, sorted best-first, with Prev/Next controls; export selections persist across pages
 - **Load a new file in place** — eject button next to the display resets the session without a page reload
 - `web/server.py` — Flask backend with `/upload`, `/export`, `/download`, `/health` endpoints
