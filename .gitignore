@@ -145,6 +145,13 @@ cython_debug/
 *.mp3
 *.ogg
 *.wav
+*.flac
+
+# Sample audio used for local detection testing -- copyrighted, not for distribution
+/sample/
+
+# macOS AppleDouble resource-fork files
+._*
 
 # Ignore generated cache file
 cache.json

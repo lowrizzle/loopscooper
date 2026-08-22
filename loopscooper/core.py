@@ -9,9 +9,9 @@ from typing import List, Optional, Tuple, Union
 import lazy_loader as lazy
 import numpy as np
 
-from pymusiclooper.analysis import LoopPair, find_best_loop_points
-from pymusiclooper.audio import MLAudio
-from pymusiclooper.playback import PlaybackHandler
+from loopscooper.analysis import LoopPair, find_best_loop_points
+from loopscooper.audio import MLAudio
+from loopscooper.playback import PlaybackHandler
 
 # Lazy-load external libraries when they're needed
 soundfile = lazy.load("soundfile")
@@ -27,42 +27,50 @@ class MusicLooper:
         self.mlaudio = MLAudio(filepath=filepath)
 
     def find_loop_pairs(
-        self,
-        min_duration_multiplier: float = 0.35,
-        min_loop_duration: Optional[float] = None,
-        max_loop_duration: Optional[float] = None,
-        approx_loop_start: Optional[float] = None,
-        approx_loop_end: Optional[float] = None,
-        brute_force: bool = False,
-        disable_pruning: bool = False,
-    ) -> List[LoopPair]:
-        """Finds the best loop points for the track, according to the parameters specified.
+            self,
+            min_duration_multiplier: float = 0.35,
+            min_loop_duration: Optional[float] = None,
+            max_loop_duration: Optional[float] = None,
+            approx_loop_start: Optional[float] = None,
+            approx_loop_end: Optional[float] = None,
+            brute_force: bool = False,
+            disable_pruning: bool = False,
+            target_bpm: Optional[float] = None,
+            beat_count: Optional[int] = None,
+        ) -> List[LoopPair]:
+            """Finds the best loop points for the track, according to the parameters specified.
 
-        Args:
-            min_duration_multiplier (float, optional): The minimum duration of a loop as a multiplier of track duration. Defaults to 0.35.
-            min_loop_duration (float, optional): The minimum duration of a loop (in seconds). Defaults to None.
-            max_loop_duration (float, optional): The maximum duration of a loop (in seconds). Defaults to None.
-            approx_loop_start (float, optional): The approximate location of the desired loop start (in seconds). If specified, must specify approx_loop_end as well. Defaults to None.
-            approx_loop_end (float, optional): The approximate location of the desired loop end (in seconds). If specified, must specify approx_loop_start as well. Defaults to None.
-            brute_force (bool, optional): Checks the entire track instead of the detected beats (disclaimer: runtime may be significantly longer). Defaults to False.
-            disable_pruning (bool, optional): Returns all the candidate loop points without filtering. Defaults to False.
-        
-        Raises:
-            LoopNotFoundError: raised in case no loops were found
+            Args:
+                min_duration_multiplier (float, optional): The minimum duration of a loop as a multiplier of track duration. Defaults to 0.35.
+                min_loop_duration (float, optional): The minimum duration of a loop (in seconds). Defaults to None.
+                max_loop_duration (float, optional): The maximum duration of a loop (in seconds). Defaults to None.
+                approx_loop_start (float, optional): The approximate location of the desired loop start (in seconds). If specified, must specify approx_loop_end as well. Defaults to None.
+                approx_loop_end (float, optional): The approximate location of the desired loop end (in seconds). If specified, must specify approx_loop_start as well. Defaults to None.
+                brute_force (bool, optional): Checks the entire track instead of the detected beats (disclaimer: runtime may be significantly longer). Defaults to False.
+                disable_pruning (bool, optional): Returns all the candidate loop points without filtering. Defaults to False.
+                target_bpm (float, optional): Target BPM to use as a hint for beat tracking. Defaults to None.
+                beat_count (int, optional): If set, restrict candidates to pairs of detected beats that are
+                    exactly `beat_count` beats apart (e.g. 8 for 2 bars, 16 for 4 bars of 4/4 time), guaranteeing
+                    the loop starts and ends on the beat. Defaults to None.
 
-        Returns:
-            List[LoopPair]: A list of `LoopPair` objects containing the loop points related data. See the `LoopPair` class for more info.
-        """
-        return find_best_loop_points(
-            mlaudio=self.mlaudio,
-            min_duration_multiplier=min_duration_multiplier,
-            min_loop_duration=min_loop_duration,
-            max_loop_duration=max_loop_duration,
-            approx_loop_start=approx_loop_start,
-            approx_loop_end=approx_loop_end,
-            brute_force=brute_force,
-            disable_pruning=disable_pruning
-        )
+            Raises:
+                LoopNotFoundError: raised in case no loops were found
+
+            Returns:
+                List[LoopPair]: A list of `LoopPair` objects containing the loop points related data. See the `LoopPair` class for more info.
+            """
+            return find_best_loop_points(
+                mlaudio=self.mlaudio,
+                min_duration_multiplier=min_duration_multiplier,
+                min_loop_duration=min_loop_duration,
+                max_loop_duration=max_loop_duration,
+                approx_loop_start=approx_loop_start,
+                approx_loop_end=approx_loop_end,
+                brute_force=brute_force,
+                disable_pruning=disable_pruning,
+                target_bpm=target_bpm,
+                beat_count=beat_count,
+            )
 
     @property
     def filename(self) -> str:
@@ -83,6 +91,9 @@ class MusicLooper:
 
     def seconds_to_frames(self, seconds: float) -> int:
         return self.mlaudio.seconds_to_frames(seconds)
+
+    def seconds_to_samples(self, seconds: float) -> int:
+        return self.mlaudio.seconds_to_samples(seconds)
 
     def seconds_to_samples(self, seconds: float) -> int:
         return self.mlaudio.seconds_to_samples(seconds)
@@ -129,7 +140,10 @@ class MusicLooper:
         if output_dir is not None:
             out_path = os.path.join(output_dir, self.mlaudio.filename)
         else:
-            out_path = os.path.abspath(self.mlaudio.filepath)
+            out_path = os.path.join(
+                os.path.dirname(os.path.abspath(self.mlaudio.filepath)),
+                os.path.splitext(self.mlaudio.filename)[0]
+            )
 
         soundfile.write(
             f"{out_path}-intro.{format.lower()}",
@@ -146,6 +160,28 @@ class MusicLooper:
         soundfile.write(
             f"{out_path}-outro.{format.lower()}",
             self.mlaudio.playback_audio[loop_end:],
+            self.mlaudio.rate,
+            format=format,
+        )
+
+    def export_single_loop(
+        self,
+        loop_start: int,
+        loop_end: int,
+        output_path: str,
+        format: str = "WAV",
+    ):
+        """Exports a single loop section (loop_start to loop_end) to a file.
+
+        Args:
+            loop_start (int): Loop start in samples.
+            loop_end (int): Loop end in samples.
+            output_path (str): Path to the output file (including filename and extension).
+            format (str, optional): Audio format of the exported file. Defaults to "WAV".
+        """
+        soundfile.write(
+            output_path,
+            self.mlaudio.playback_audio[loop_start:loop_end],
             self.mlaudio.rate,
             format=format,
         )
@@ -269,7 +305,7 @@ class MusicLooper:
     def export_txt(
         self,
         loop_start: Union[int, float, str],
-        loop_end: Union[str, int, float, str],
+        loop_end: Union[int, float, str],
         txt_name: str = "loops",
         output_dir: Optional[str] = None
     ):
@@ -361,7 +397,7 @@ class MusicLooper:
         loop_end_tag: str,
         is_offset: Optional[bool] = None,
         output_dir: Optional[str] = None
-    ) -> Tuple[str]:
+    ) -> Tuple[str, str]:
         """Adds metadata tags of loop points to a copy of the source audio file.
 
         Args:
@@ -377,7 +413,7 @@ class MusicLooper:
         import taglib
             
         if output_dir is None:
-            output_dir = os.path.abspath(self.mlaudio.filepath)
+            output_dir = os.path.dirname(os.path.abspath(self.mlaudio.filepath))
 
         track_name, file_extension = os.path.splitext(self.mlaudio.filename)
 

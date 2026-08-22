@@ -1,29 +1,35 @@
-# Available PyMusicLooper CLI Commands
+# Loopscooper CLI Reference
 
-## pymusiclooper
+## loopscooper
 
-![`pymusiclooper --help`](img/pymusiclooper.svg)
+![`loopscooper --help`](img/pymusiclooper.svg)
 
-## pymusiclooper play
+A single command for detecting and exporting seamless audio loops.
 
-![`pymusiclooper play --help`](img/pymusiclooper-play.svg)
+```
+Usage: loopscooper [OPTIONS] [FILENAME]
 
-## pymusiclooper play-tagged
+A program for detecting and exporting seamless music loops for game audio.
 
-![`pymusiclooper play-tagged --help`](img/pymusiclooper-play-tagged.svg)
+Options:
+  -d, --debug      Enables debugging mode.
+  -v, --verbose    Enables verbose logging output.
+  --version        Show the version and exit.
+  --url TEXT       Link to a YouTube video (or any stream supported by yt-dlp).
+  --help           Show this message and exit.
+```
 
-## pymusiclooper export-points
+### Examples
 
-![`pymusiclooper export-points --help`](img/pymusiclooper-export-points.svg)
+```bash
+# Basic usage — finds file in CWD, auto-detects BPM, interactive preview & export
+loopscooper song.wav
 
-## pymusiclooper split-audio
+# Absolute path
+loopscooper /Users/youruser/Music/song.wav
 
-![`pymusiclooper split-audio --help`](img/pymusiclooper-split-audio.svg)
+# Relative path
+loopscooper ./music/song.wav
+```
 
-## pymusiclooper tag
-
-![`pymusiclooper tag --help`](img/pymusiclooper-tag.svg)
-
-## pymusiclooper extend
-
-![`pymusiclooper extend --help`](img/pymusiclooper-extend.svg)
+If the file is not found in the current working directory, the script will attempt to resolve it as a relative or absolute path. If still not found, it errors with a message asking the user to provide a valid file path.

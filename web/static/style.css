@@ -1,0 +1,430 @@
+:root {
+    /* Beige chassis body */
+    --beige: #d9cdae;
+    --beige-dark: #c2b088;
+    --ink: #3b3324;
+    --ink-dim: #6b5f45;
+    --ink-faint: #8c7f60;
+
+    /* Grey control-panel module (loop candidates, buttons, badges) */
+    --panel: #38383c;
+    --panel-light: #48484c;
+    --panel-inset: #1f1f21;
+    --text-primary: #e9e7e2;
+    --text-dim: #a3a3a6;
+    --text-faint: #6f6f73;
+    --border: #4a4a4e;
+    --border-light: #59595e;
+
+    /* Dot-matrix LCD */
+    --lcd-bg: #d3d6c4;
+    --lcd-text: #24261f;
+    --lcd-bezel: #201e1a;
+
+    --red: #c8382a;
+    --red-bright: #e8493a;
+    --red-dim: #7a2820;
+    --red-glow: rgba(232, 73, 58, 0.35);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background:
+        radial-gradient(ellipse at top, var(--beige) 0%, transparent 65%),
+        linear-gradient(180deg, var(--beige) 0%, var(--beige-dark) 100%);
+    color: var(--ink);
+    min-height: 100vh;
+    line-height: 1.6;
+}
+
+.mono {
+    font-family: 'Courier New', Consolas, Menlo, monospace;
+}
+
+main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 3rem;
+}
+
+/* --- Drop zone: styled like an inset cassette/disk slot --- */
+.drop-zone {
+    border: 2px dashed var(--red-dim);
+    border-radius: 4px;
+    padding: 3.5rem 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--panel-inset);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+    border-color: var(--red-bright);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6), 0 0 14px var(--red-glow);
+}
+
+.drop-zone p {
+    font-size: 0.95rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-weight: 600;
+}
+
+#loading {
+    text-align: center;
+    padding: 3rem 1rem;
+}
+
+.spinner {
+    width: 34px;
+    height: 34px;
+    border: 3px solid var(--panel);
+    border-top-color: var(--red-bright);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+#loading p {
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.85rem;
+}
+
+#results h2 {
+    font-size: 0.85rem;
+    color: var(--ink-faint);
+    margin: 2.25rem 0 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+/* --- Audio info: single dot-matrix LCD display, four lines --- */
+.audio-info-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: stretch;
+}
+
+.eject-btn {
+    flex: 0 0 auto;
+    width: 3.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1.4rem;
+    background: linear-gradient(160deg, var(--panel-light) 0%, var(--panel) 100%);
+}
+
+.eject-btn:hover {
+    background: var(--red);
+    border-color: var(--red-bright);
+    color: #fff;
+    box-shadow: 0 0 10px var(--red-glow);
+}
+
+#lcd-display {
+    flex: 1 1 auto;
+    min-width: 0;
+    background-color: var(--lcd-bg);
+    background-image: radial-gradient(rgba(0, 0, 0, 0.09) 1px, transparent 1.4px);
+    background-size: 3px 3px;
+    border: 10px solid var(--lcd-bezel);
+    border-radius: 6px;
+    padding: 1.1rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.55rem;
+    box-shadow:
+        inset 0 2px 5px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.15),
+        0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.lcd-line {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    font-family: 'Courier New', Consolas, Menlo, monospace;
+    min-width: 0;
+}
+
+.lcd-label {
+    flex: 0 0 auto;
+    color: var(--lcd-text);
+    opacity: 0.55;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.08em;
+}
+
+.lcd-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    color: var(--lcd-text);
+    font-weight: 700;
+    font-size: 1.2rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    text-shadow: 0 0 1px rgba(0, 0, 0, 0.25);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- Loop candidates: grey control-panel module against the beige body --- */
+#loop-candidates {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.1rem;
+    margin-top: 2.25rem;
+    color: var(--text-primary);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 3px 6px rgba(0, 0, 0, 0.18);
+}
+
+#loop-candidates h2 {
+    color: var(--text-faint);
+    margin-top: 0;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+    margin-top: 0.5rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-inset);
+}
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 0.9rem;
+}
+
+.pagination button {
+    padding: 0.45rem 0.9rem;
+    font-size: 0.72rem;
+}
+
+.page-indicator {
+    font-family: 'Courier New', Consolas, Menlo, monospace;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+}
+
+#loops-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+#loops-table th,
+#loops-table td {
+    padding: 0.65rem 0.85rem;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    white-space: nowrap;
+}
+
+#loops-table td:nth-child(3),
+#loops-table td:nth-child(4),
+#loops-table td:nth-child(5) {
+    font-family: 'Courier New', Consolas, Menlo, monospace;
+}
+
+#loops-table th {
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+}
+
+#loops-table tbody tr {
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+#loops-table tbody tr:hover {
+    background: rgba(232, 73, 58, 0.08);
+}
+
+#loops-table tbody tr.playing {
+    background: rgba(232, 73, 58, 0.16);
+    box-shadow: inset 3px 0 0 var(--red-bright);
+}
+
+#loops-table tbody tr.playing:hover {
+    background: rgba(232, 73, 58, 0.2);
+}
+
+#loops-table input[type="checkbox"] {
+    accent-color: var(--red-bright);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+}
+
+#loops-table td:first-child,
+#loops-table td:nth-child(2) {
+    width: 40px;
+    text-align: center;
+}
+
+#loops-table th:first-child,
+#loops-table th:nth-child(2) {
+    width: 40px;
+    text-align: center;
+}
+
+.loop-type-badge {
+    display: inline-block;
+    padding: 0.15em 0.55em;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid transparent;
+}
+
+.loop-type-badge.one_bar {
+    background: transparent;
+    border-color: var(--border-light);
+    color: var(--text-dim);
+}
+
+.loop-type-badge.two_bars {
+    background: rgba(232, 73, 58, 0.12);
+    border-color: var(--red-dim);
+    color: #f0a89f;
+}
+
+.loop-type-badge.four_bars {
+    background: var(--red);
+    border-color: var(--red-bright);
+    color: #fff;
+}
+
+.loop-type-badge.unknown {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-faint);
+    border-style: dashed;
+}
+
+.score-cell {
+    font-variant-numeric: tabular-nums;
+    font-family: 'Courier New', Consolas, Menlo, monospace;
+    color: var(--text-dim);
+}
+
+#actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+button {
+    padding: 0.7rem 1.4rem;
+    border: 1px solid var(--border-light);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    background: var(--panel);
+    color: var(--text-primary);
+}
+
+button:hover:not(:disabled) {
+    border-color: var(--red-bright);
+}
+
+#export-btn {
+    background: linear-gradient(160deg, var(--red-bright) 0%, var(--red) 100%);
+    border-color: var(--red-bright);
+    color: #fff;
+}
+
+#export-btn:hover:not(:disabled) {
+    box-shadow: 0 0 14px var(--red-glow);
+}
+
+#retry-btn {
+    background: linear-gradient(160deg, var(--red-bright) 0%, var(--red) 100%);
+    border-color: var(--red-bright);
+    color: #fff;
+}
+
+#retry-btn:hover {
+    box-shadow: 0 0 14px var(--red-glow);
+}
+
+button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+#error {
+    text-align: center;
+    padding: 2.5rem 1rem;
+}
+
+.error-message {
+    color: var(--red-bright);
+    margin-bottom: 1.25rem;
+    font-size: 0.95rem;
+    white-space: pre-line;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (max-width: 600px) {
+    .drop-zone {
+        padding: 2.5rem 1.5rem;
+    }
+
+    .lcd-value {
+        font-size: 1rem;
+    }
+
+    #actions {
+        flex-direction: column;
+    }
+
+    button {
+        width: 100%;
+    }
+}
+

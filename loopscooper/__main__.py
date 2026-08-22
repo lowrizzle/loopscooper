@@ -1,11 +1,11 @@
 import logging
 
-from pymusiclooper.cli import cli_main
+from loopscooper.cli import cli_main
 
 
 def cli():
     try:
-        cli_main(prog_name="pymusiclooper")
+        cli_main()
     except Exception as e:
         logging.error(e)
 

@@ -7,7 +7,7 @@ yt_dlp = lazy.load("yt_dlp")
 
 class YtdLogger:
     def __init__(self) -> None:
-        self.verbose = "PML_VERBOSE" in os.environ
+        self.verbose = "LOOPSCOOPER_VERBOSE" in os.environ
 
     def debug(self, msg):
         # For compatibility with youtube-dl, both debug and info are passed into debug

@@ -7,8 +7,8 @@ import librosa
 import numpy as np
 from numba import njit
 
-from pymusiclooper.audio import MLAudio
-from pymusiclooper.exceptions import LoopNotFoundError
+from loopscooper.audio import MLAudio
+from loopscooper.exceptions import LoopNotFoundError
 
 
 @dataclass
@@ -40,6 +40,8 @@ def find_best_loop_points(
     approx_loop_end: Optional[float] = None,
     brute_force: bool = False,
     disable_pruning: bool = False,
+    target_bpm: Optional[float] = None,
+    beat_count: Optional[int] = None,
 ) -> List[LoopPair]:
     """Finds the best loop points for a given audio track, given the constraints specified
 
@@ -52,6 +54,12 @@ def find_best_loop_points(
         approx_loop_end (float, optional): The approximate location of the desired loop end (in seconds). If specified, must specify approx_loop_start as well. Defaults to None.
         brute_force (bool, optional): Checks the entire track instead of the detected beats (disclaimer: runtime may be significantly longer). Defaults to False.
         disable_pruning (bool, optional): Returns all the candidate loop points without filtering. Defaults to False.
+        target_bpm (float, optional): Target BPM to use as a hint for beat tracking. Defaults to None.
+        beat_count (int, optional): If set, restrict candidates to pairs of actually-detected beats that are
+            exactly `beat_count` beats apart (e.g. 8 for 2 bars of 4/4, 16 for 4 bars). Because both the start
+            and end of the loop land on real detected beats, and the beat count between them is exact, the
+            resulting loop is guaranteed to be phase-locked to the track's beat grid instead of merely close
+            to the right duration. Defaults to None (uses variable-length search via min/max).
     Raises:
         LoopNotFoundError: raised in case no loops were found
 
@@ -75,10 +83,12 @@ def find_best_loop_points(
     # Loop points must be at least 1 frame apart
     min_loop_duration = max(1, min_loop_duration)
 
+    metrical_beats = None
+
     if approx_loop_start is not None and approx_loop_end is not None:
         # Skipping the unnecessary beat analysis (in this case) speeds up the analysis runtime by ~2x
         # and significantly reduces the total memory consumption
-        chroma, power_db, _, _ = _analyze_audio(mlaudio, skip_beat_analysis=True)
+        chroma, power_db, _, _, _ = _analyze_audio(mlaudio, skip_beat_analysis=True)
         # Set bpm to a general average of 120
         bpm = 120.0
 
@@ -124,15 +134,15 @@ def find_best_loop_points(
         )
     elif brute_force:
         # Similarly skip beat analysis, as the results will not be used
-        chroma, power_db, _, _ = _analyze_audio(mlaudio, skip_beat_analysis=True)
+        chroma, power_db, _, _, _ = _analyze_audio(mlaudio, skip_beat_analysis=True)
         bpm = 120.0
         beats = np.arange(start=0, stop=chroma.shape[-1], step=1, dtype=int)
         logging.info(f"Overriding number of frames to check with: {beats.size}")
         logging.info(f"Estimated iterations required using brute force: {int(beats.size*beats.size*(1-(min_loop_duration/chroma.shape[-1])))}")
         logging.info("**NOTICE** The program may appear frozen, but processing will continue in the background. This operation may take several minutes to complete.")
     else: # normal mode of operation
-        chroma, power_db, bpm, beats = _analyze_audio(mlaudio)
-        logging.info(f"Detected {beats.size} beats at {bpm:.0f} bpm")
+        chroma, power_db, bpm, metrical_beats, beats = _analyze_audio(mlaudio, target_bpm=target_bpm)
+        logging.info(f"Detected {beats.size} beats ({metrical_beats.size} on-grid) at {bpm:.0f} bpm")
 
     logging.info(
         "Finished initial audio processing in {:.3f}s".format(
@@ -142,11 +152,21 @@ def find_best_loop_points(
 
     initial_pairs_start_time = time.perf_counter()
 
-    # Since numba jitclass cannot be cached, the pair data must be stored temporarily in a list of tuple
-    # (instead of a list of LoopPairs directly) and then loaded into a list of LoopPair objects using list comprehension
-    unproc_candidate_pairs = _find_candidate_pairs(
-        chroma, power_db, beats, min_loop_duration, max_loop_duration
-    )
+    if beat_count is not None:
+        if metrical_beats is None:
+            raise ValueError("beat_count search requires normal (non-brute-force, non-approx) analysis mode.")
+        unproc_candidate_pairs = _find_beat_count_aligned_pairs(
+            chroma, power_db, metrical_beats, beat_count
+        )
+        logging.info(
+            f"Beat-count-aligned search: {beat_count} beats apart "
+            f"({metrical_beats.size} candidate anchor beats)"
+        )
+    else:
+        unproc_candidate_pairs = _find_candidate_pairs(
+            chroma, power_db, beats, min_loop_duration, max_loop_duration
+        )
+
     candidate_pairs = [
         LoopPair(
             _loop_start_frame_idx=tup[0],
@@ -214,8 +234,8 @@ def find_best_loop_points(
 
 
 def _analyze_audio(
-    mlaudio: MLAudio, skip_beat_analysis=False
-) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray]:
+    mlaudio: MLAudio, skip_beat_analysis=False, target_bpm: Optional[float] = None
+) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray, np.ndarray]:
     """Performs the main audio analysis required
 
     Args:
@@ -223,7 +243,9 @@ def _analyze_audio(
         skip_beat_analysis (bool, optional): Skips beat analysis if true and returns None for bpm and beats. Defaults to False.
 
     Returns:
-        Tuple[np.ndarray, np.ndarray, float, np.ndarray]: a tuple containing the (chroma spectrogram, power spectrogram in dB, tempo/bpm, frame indices of detected beats)
+        Tuple[np.ndarray, np.ndarray, float, np.ndarray, np.ndarray]: a tuple containing the (chroma spectrogram,
+        power spectrogram in dB, tempo/bpm, frame indices of detected beats on the metrical grid only,
+        frame indices of detected beats merged with onset-strength peaks for a denser candidate pool)
     """
     S = librosa.core.stft(y=mlaudio.audio)
     S_power = np.abs(S) ** 2
@@ -237,32 +259,148 @@ def _analyze_audio(
     power_db = librosa.power_to_db(S_weighed, ref=np.median)
 
     if skip_beat_analysis:
-        return chroma, power_db, None, None
+        return chroma, power_db, None, None, None
 
     try:
         onset_env = librosa.onset.onset_strength(S=mel_spectrogram)
 
         pulse = librosa.beat.plp(onset_envelope=onset_env)
         beats_plp = np.flatnonzero(librosa.util.localmax(pulse))
-        bpm, beats = librosa.beat.beat_track(onset_envelope=onset_env)
+        if beats_plp.size == 0:
+            beats_plp = np.array([0], dtype=int)
 
-        beats = np.union1d(beats, beats_plp)
-        beats = np.sort(beats)
+        if target_bpm is not None:
+            bpm = float(target_bpm)
+        else:
+            import librosa.feature.rhythm as librosa_rhythm
+            bpm = librosa_rhythm.tempo(onset_envelope=onset_env, sr=mlaudio.rate)
+            if isinstance(bpm, np.ndarray):
+                bpm = float(bpm[0])
 
-        if isinstance(bpm, np.ndarray):
-            bpm = bpm[0]
+        # librosa.beat.beat_track's dynamic-programming placement can lock onto exactly
+        # double the true beat period for driving, syncopated drum patterns (its
+        # predecessor search window spans half to double the target period, and strong
+        # off-grid onset energy -- e.g. 8th-note hi-hats -- can win that search even at
+        # very high `tightness`), even though its own *reported* aggregate tempo is
+        # accurate. That silently doubles the beat count per bar, which is exactly what
+        # a beat-count-aligned loop search must not tolerate. So the metrical grid used
+        # for that search is built directly from the (accurate) tempo instead: evenly
+        # spaced beat positions, each self-correcting to the nearest local onset peak
+        # within a narrow window that structurally excludes the half-period competitor.
+        beats = _build_beat_grid(onset_env, frame_rate=mlaudio.rate / 512, bpm=bpm, total_frames=chroma.shape[-1])
+
+        # A denser candidate pool (metrical beats + onset-strength peaks) is useful for the
+        # variable-length fallback search, but mixing in non-metrical onsets breaks the
+        # assumption that "N positions apart" means "N beats apart" -- so keep the pure
+        # metrical grid separately for beat-count-aligned (bar-locked) searches.
+        beats_dense = np.sort(np.union1d(beats, beats_plp))
     except Exception as e:
         raise LoopNotFoundError(f"Beat analysis failed for \"{mlaudio.filename}\". Cannot continue.") from e
 
-    return chroma, power_db, bpm, beats
+    return chroma, power_db, bpm, beats, beats_dense
 
 
-@njit
+def _build_beat_grid(
+    onset_env: np.ndarray,
+    frame_rate: float,
+    bpm: float,
+    total_frames: int,
+    snap_window_fraction: float = 0.2,
+    damping: float = 0.35,
+    polish_window_fraction: float = 0.10,
+) -> np.ndarray:
+    """Builds a beat grid evenly spaced at `bpm`, gently phase-corrected against the
+    onset envelope like a simple PLL. Unlike a DP-based beat tracker, the search
+    window is a fixed, narrow fraction of a single beat period, so it cannot lock
+    onto a doubled (or halved) pulse the way `librosa.beat.beat_track` sometimes does
+    for syncopated material -- the competing off-grid onset simply falls outside the
+    window.
+
+    Each reported beat is the *smoothed model position* (`target`), not the raw
+    nearest onset peak. A syncopated hit close to a beat (a grace note, ghost snare,
+    etc.) is common in hip-hop and can be the loudest thing in the window without
+    being the actual beat -- snapping straight to it would throw that one beat off by
+    a large fraction of a beat period. Instead, the observed offset between the
+    model's prediction and the nearest strong onset only nudges the *running phase*
+    used for future predictions, and only by `damping` of the observed error. This
+    still lets the grid track genuine, sustained tempo-estimation error over the
+    length of the track (the correction accumulates every step), while a single
+    off-grid onset can only perturb subsequent beats by a fraction of its size instead
+    of being taken at face value.
+
+    Args:
+        onset_env (np.ndarray): Onset strength envelope
+        frame_rate (float): Frames per second of the onset envelope / chroma / power_db arrays
+        bpm (float): Tempo to space the grid at
+        total_frames (int): Length of the track in frames (i.e. chroma.shape[-1])
+        snap_window_fraction (float, optional): Fraction of one beat period to search around
+            each nominal grid position for the nearest onset peak. Defaults to 0.2.
+        damping (float, optional): Fraction of each step's observed offset that is applied
+            to the running phase. Defaults to 0.35.
+        polish_window_fraction (float, optional): Fraction of one beat period to search around
+            each already phase-corrected beat for a final, non-propagating snap onto the
+            nearest true onset. Defaults to 0.15.
+
+    Returns:
+        np.ndarray: Sorted, deduplicated frame indices of the beat grid
+    """
+    frames_per_beat = frame_rate * 60.0 / bpm
+    if frames_per_beat <= 0 or total_frames <= 0:
+        return np.array([0], dtype=int)
+
+    snap_radius = max(1, int(round(frames_per_beat * snap_window_fraction)))
+
+    # Anchor the grid's phase to the strongest onset within the first beat period
+    first_window = onset_env[: max(1, int(round(frames_per_beat)))]
+    phase = int(np.argmax(first_window)) if first_window.size > 0 else 0
+
+    beats = []
+    pos = float(phase)
+    max_beats = int(total_frames / frames_per_beat) + 2
+    for _ in range(max_beats):
+        if pos >= total_frames:
+            break
+        target = int(round(pos))
+        beats.append(target)
+
+        lo = max(0, target - snap_radius)
+        hi = min(total_frames, target + snap_radius + 1)
+        error = (lo + int(np.argmax(onset_env[lo:hi])) - target) if hi > lo else 0
+
+        pos = pos + frames_per_beat + damping * error
+
+    # Final polish: independently snap each already-correctly-spaced beat onto the
+    # nearest true onset peak. Unlike the phase correction above, this does not feed
+    # back into subsequent beats, so a single snap can't propagate or compound -- it
+    # only sharpens that one boundary from the model's slightly-smoothed prediction
+    # onto the actual drum hit, so loop points land on the transient itself instead of
+    # a few tens of milliseconds before or after it (audible as a clipped/missing hit
+    # right at the loop seam). The nearest genuine local peak to the model's prediction
+    # is used (rather than the loudest sample in the window), since the model position
+    # is already accurate to within a small fraction of a beat: preferring proximity
+    # over loudness avoids reaching past the correct, closer transient to grab a louder
+    # but musically unrelated one (e.g. a 16th-note hi-hat) at the edge of the window.
+    is_peak = librosa.util.localmax(onset_env)
+    polish_radius = max(1, int(round(frames_per_beat * polish_window_fraction)))
+    polished = []
+    for b in beats:
+        lo = max(0, b - polish_radius)
+        hi = min(total_frames, b + polish_radius + 1)
+        local_peaks = lo + np.flatnonzero(is_peak[lo:hi])
+        if local_peaks.size > 0:
+            polished.append(int(local_peaks[np.argmin(np.abs(local_peaks - b))]))
+        else:
+            polished.append(b)
+
+    return np.array(sorted(set(b for b in polished if 0 <= b < total_frames)), dtype=int)
+
+
+@njit(cache=True)
 def _db_diff(power_db_f1: np.ndarray, power_db_f2: np.ndarray) -> float:
     return np.abs(np.max(power_db_f1) - np.max(power_db_f2))
 
 
-@njit
+@njit(cache=True)
 def _norm(a: np.ndarray) -> float:
     return np.sqrt(np.sum(np.abs(a) ** 2, axis=0))
 
@@ -294,7 +432,7 @@ def _find_candidate_pairs(
     ## Mainly found through trial and error,
     ## higher values typically result in the inclusion of musically unrelated beats/notes
     ACCEPTABLE_NOTE_DEVIATION = 0.0875
-    ## Since the _db_diff comparison is takes a perceptually weighted power_db frame,
+    ## Since the _db_diff comparison takes a perceptually weighted power_db frame,
     ## the difference should be imperceptible (ideally, close to 0)
     ## Based on trial and error, values higher than ~0.5 have a perceptible
     ## difference in loudness
@@ -323,6 +461,60 @@ def _find_candidate_pairs(
                 )
                 if loudness_difference <= ACCEPTABLE_LOUDNESS_DIFFERENCE:
                     candidate_pairs.append(loop_pair)
+
+    return candidate_pairs
+
+
+@njit(cache=True)
+def _find_beat_count_aligned_pairs(
+    chroma: np.ndarray,
+    power_db: np.ndarray,
+    beats: np.ndarray,
+    n_beats: int,
+) -> List[Tuple[int, int, float, float]]:
+    """Generates loop candidates from pairs of beats that are exactly `n_beats` apart
+    on the detected beat grid (e.g. n_beats=8 for 2 bars, 16 for 4 bars of 4/4 time).
+
+    Unlike a fixed-duration-in-frames search, this counts actual detected beats rather
+    than converting a theoretical bar duration to frames, so it is immune to small BPM
+    estimation error compounding over several bars. Because both endpoints are real
+    detected beats, the loop also starts and ends on the beat instead of on an arbitrary
+    onset, so the wrap point stays phase-locked to the track's rhythm.
+
+    Args:
+        chroma (np.ndarray): The chroma spectrogram
+        power_db (np.ndarray): The power spectrogram in dB
+        beats (np.ndarray): The frame indices of detected beats (metrical grid only)
+        n_beats (int): Number of beats that must separate loop_start and loop_end
+
+    Returns:
+        List[Tuple[int, int, float, float]]: A list of tuples containing each candidate loop pair data
+        in the following format (loop_start, loop_end, note_distance, loudness_difference)
+    """
+    candidate_pairs = []
+
+    ACCEPTABLE_NOTE_DEVIATION = 0.0875
+    ACCEPTABLE_LOUDNESS_DIFFERENCE = 0.5
+
+    n = beats.shape[0]
+    for i in range(n - n_beats):
+        start = beats[i]
+        end = beats[i + n_beats]
+
+        note_distance = _norm(chroma[..., end] - chroma[..., start])
+        deviation = _norm(chroma[..., end] * ACCEPTABLE_NOTE_DEVIATION)
+
+        if note_distance <= deviation:
+            loudness_difference = _db_diff(
+                power_db[..., end], power_db[..., start]
+            )
+            if loudness_difference <= ACCEPTABLE_LOUDNESS_DIFFERENCE:
+                candidate_pairs.append((
+                    int(start),
+                    int(end),
+                    note_distance,
+                    loudness_difference,
+                ))
 
     return candidate_pairs
 
@@ -361,7 +553,7 @@ def _assess_and_filter_loop_pairs(
     else:
         pruned_candidate_pairs = candidate_pairs
 
-    weights = _weights(test_offset, start=max(2, test_offset // num_test_beats), stop=1)
+    weights = _geometric_weights(test_offset, start=max(2, test_offset // num_test_beats), stop=1)
 
     pair_score_list = [
         _calculate_loop_score(
@@ -443,7 +635,7 @@ def _prioritize_duration(pair_list: List[LoopPair]) -> List[LoopPair]:
         if duration > duration_max and pair.loudness_difference <= db_threshold:
             duration_max, duration_argmax = duration, idx
 
-    if duration_argmax:
+    if duration_argmax != 0:
         pair_list.insert(0, pair_list.pop(duration_argmax))
 
 
@@ -519,7 +711,13 @@ def _calculate_subseq_beat_similarity(
     )
     b1_norm = np.linalg.norm(chroma[..., b1_start:b1_end], axis=0)
     b2_norm = np.linalg.norm(chroma[..., b2_start:b2_end], axis=0)
-    cosine_sim = dot_prod / (np.maximum(b1_norm * b2_norm, 1e-10))
+    # Avoid division by zero: only divide where norm product is significant
+    norm_product = b1_norm * b2_norm
+    cosine_sim = np.divide(
+        dot_prod, norm_product,
+        where=norm_product > 1e-10,
+        out=np.zeros_like(dot_prod)
+    )
 
     if max_offset < test_length:
         return np.average(
@@ -530,7 +728,8 @@ def _calculate_subseq_beat_similarity(
         return np.average(cosine_sim, weights=weights)
 
 
-def _weights(length: int, start: int = 100, stop: int = 1):
+def _geometric_weights(length: int, start: int = 100, stop: int = 1) -> np.ndarray:
+    """Return geometrically spaced weights from `start` to `stop`."""
     return np.geomspace(start, stop, num=length)
 
 

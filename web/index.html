@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loopscooper</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <main>
+        <div id="upload-zone" class="drop-zone">
+            <p>Drag & drop an audio file here, or click to select</p>
+            <input type="file" id="file-input" accept="audio/*" hidden
+                   aria-label="Select an audio file to analyze">
+        </div>
+
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p>Analyzing audio...</p>
+        </div>
+
+        <div id="results" class="hidden">
+            <div id="audio-info">
+                <h2>Audio Information</h2>
+                <div class="audio-info-row">
+                    <div id="lcd-display" aria-label="Audio information display">
+                        <div class="lcd-line">
+                            <span class="lcd-label">FILE</span>
+                            <span class="lcd-value" id="filename"></span>
+                        </div>
+                        <div class="lcd-line">
+                            <span class="lcd-label">TIME</span>
+                            <span class="lcd-value" id="duration"></span>
+                        </div>
+                        <div class="lcd-line">
+                            <span class="lcd-label">BPM</span>
+                            <span class="lcd-value" id="bpm"></span>
+                        </div>
+                        <div class="lcd-line">
+                            <span class="lcd-label">KEY</span>
+                            <span class="lcd-value" id="key"></span>
+                        </div>
+                    </div>
+                    <button id="new-file-btn" class="eject-btn" type="button" aria-label="Load a new file" title="Load a new file">⏏</button>
+                </div>
+            </div>
+
+            <div id="loop-candidates">
+                <h2>Loop Candidates</h2>
+                <div class="table-wrapper">
+                    <table id="loops-table">
+                        <thead>
+                            <tr>
+                                <th>Export</th>
+                                <th>Index</th>
+                                <th>Start</th>
+                                <th>End</th>
+                                <th>Length</th>
+                                <th>Type</th>
+                                <th>Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="loops-tbody">
+                        </tbody>
+                    </table>
+                </div>
+                <div id="pagination" class="pagination hidden">
+                    <button id="prev-page-btn" type="button" aria-label="Previous page">‹ PREV</button>
+                    <span id="page-indicator" class="page-indicator"></span>
+                    <button id="next-page-btn" type="button" aria-label="Next page">NEXT ›</button>
+                </div>
+            </div>
+
+            <div id="actions">
+                <button id="export-btn" disabled>Export Selected</button>
+            </div>
+        </div>
+
+        <div id="error" class="hidden">
+            <p class="error-message"></p>
+            <button id="retry-btn">Try Again</button>
+        </div>
+    </main>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

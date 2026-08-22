@@ -3,13 +3,13 @@ import os
 import librosa
 import numpy as np
 
-from pymusiclooper.exceptions import AudioLoadError
+from loopscooper.exceptions import AudioLoadError
 
 
 class MLAudio:
     """Wrapper class for loading audio files and containing the necessary audio data for PyMusicLooper."""
 
-    total_duration: int
+    total_duration: float
     filepath: str
     filename: str
     audio: np.ndarray
@@ -97,7 +97,7 @@ class MLAudio:
     def frames_to_ftime(self, frame: int):
         time_sec = librosa.core.frames_to_time(frame, sr=self.rate)
         return f"{time_sec // 60:02.0f}:{time_sec % 60:06.3f}"
-    
+
     def samples_to_ftime(self, samples: int):
         time_sec = librosa.core.samples_to_time(samples, sr=self.rate)
         return f"{time_sec // 60:02.0f}:{time_sec % 60:06.3f}"

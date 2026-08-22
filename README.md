@@ -1,212 +1,161 @@
-# PyMusicLooper
+# Loopscooper
 
-[![Downloads](https://static.pepy.tech/badge/pymusiclooper)](https://pepy.tech/project/pymusiclooper)
-[![Downloads](https://static.pepy.tech/badge/pymusiclooper/month)](https://pepy.tech/project/pymusiclooper)
-[![PyPI pyversions](https://img.shields.io/pypi/v/pymusiclooper.svg)](https://pypi.python.org/pypi/pymusiclooper/)
-[![PyPI pyversions](https://img.shields.io/pypi/pyversions/pymusiclooper.svg)](https://pypi.python.org/pypi/pymusiclooper/)
+Automatic beat detection and loop discovery for producers.
 
-A python-based program for repeating music seamlessly and endlessly, by automatically finding the best loop points.
+Drag a song into Loopscooper and it finds the most likely beat drops — 2-bar and 4-bar loops, with 1-bar loops surfaced only when they score exceptionally well — then lets you preview and export them as clean, seamless WAV samples. Just drop a track, listen to what's there, and grab the loops you want.
 
-Features:
+![Loopscooper web interface](img/ui.jpg)
 
-- Find loop points within any audio file (if they exist).
-- Supports loading the most common audio formats (MP3, OGG, FLAC, WAV), with additional codec support available through ffmpeg.
-- Play the audio file endlessly and seamlessly with the best automatically discovered loop points, or using the loop metadata tags present in the audio file.
-- Export to intro/loop/outro sections for editing or seamless playback within any music player that supports [gapless playback](https://en.wikipedia.org/wiki/Gapless_playback).
-- Export loop points in samples directly to the terminal or to a text file (e.g. for use in creating custom themes with seamlessly looping audio).
-- Export the loop points as metadata tags to a copy of the input audio file(s), for use with game engines, etc.
-- Export a longer, extended version of an audio track by looping it seamlessly to the desired length
+## Features
 
-## Pre-requisites
-
-The following software must be installed for `pymusiclooper` to function correctly.
-
-- [Python (64-bit)](https://www.python.org/downloads/) >=3.10
-- [ffmpeg](https://ffmpeg.org/download.html): required for loading audio from youtube (or any stream supported by [yt-dlp](https://github.com/yt-dlp/yt-dlp)) and adds support for loading additional audio formats and codecs such as M4A/AAC, Apple Lossless (ALAC), WMA, ATRAC (.at9), etc. A full list can be found at [ffmpeg's documentation](https://www.ffmpeg.org/general.html#Audio-Codecs). If the aforementioned features are not required, can be skipped.
-
-Supported audio formats *without* ffmpeg include: WAV, FLAC, Ogg/Vorbis, Ogg/Opus, MP3.
-A full list can be found at [libsndfile's supported formats page](https://libsndfile.github.io/libsndfile/formats.html)
-
-Additionally, to use the `play` command on Linux systems, you may need to
-install the PortAudio library. On Ubuntu, run `sudo apt install libportaudio2`.
+- **Drag & drop audio** — web interface at `http://localhost:8282` or CLI
+- **Auto-detect BPM** — estimates tempo and suggests 1-bar / 2-bar / 4-bar loop lengths in seconds
+- **Auto-detect musical key** — uses the Krumhansl-Schmuckler algorithm to determine the track's key
+- **Beat-locked detection** — anchors candidates to actually-detected beats an exact beat-count apart (not just a duration window), so loops start and end on the beat instead of merely being close to the right length
+- **2-bar / 4-bar first** — 1-bar loops are short enough to sound incomplete, so they're only surfaced when the chroma/loudness match scores 90% or higher
+- **Instant preview** — click any loop to hear it loop back-to-back in the browser, click again to stop
+- **Paginated results** — candidates are sorted best-first and shown 8 per page, so a track with hundreds of candidates doesn't turn into an endless scroll
+- **Export as ZIP** — select loops across any page and download them as a ready-to-use sample pack
+- **Load a new file without reloading** — the eject button next to the display resets the session in place
 
 ## Installation
 
-### Option 1: Installing using uv [Recommended]
-
-This method of installation is strongly recommended, as it isolates PyMusicLooper's dependencies from the rest of your environment,
-and as a result, avoids dependency conflicts and breakage due to other packages.
-
-Required tool: [`uv`](https://github.com/astral-sh/uv).
-
-Note: python is not required, as `uv` automatically installs this package's required python version automatically if not present.
+### From source
 
 ```sh
-# Normal install
-# (follows the official releases on https://pypi.org/project/pymusiclooper/)
-uv tool install pymusiclooper
-
-# Alternative install
-# (follows the git repository; equivalent to a nightly release channel)
-uv tool install git+https://github.com/arkrow/PyMusicLooper.git
-
-# Updating to new releases in either case can be done simply using:
-uv tool upgrade pymusiclooper
+git clone https://github.com/<user>/loopscooper.git
+cd loopscooper
+uv pip install -e .
 ```
 
-Installation note: you may need to specify a Python version if the latest Python release is not supported and fails to install, e.g.
+## Pre-requisites
+
+- Python >=3.10
+- [ffmpeg](https://ffmpeg.org/download.html) — required for additional audio formats
+
+## Usage
+
+### CLI
 
 ```sh
-uv tool install pymusiclooper --python "3.12"
+# Basic — finds file in CWD, auto-detects BPM, interactive preview & export
+loopscooper song.wav
+
+# Absolute path
+loopscooper /Users/youruser/Music/song.wav
+
+# Relative path
+loopscooper ./music/song.wav
 ```
 
-### Option 2: Installing using pipx
+If the file is not found in the current working directory, the script will attempt to resolve it as a relative or absolute path. If still not found, it errors with a message asking the user to provide a valid file path.
 
-Like `uv`, isolates PyMusicLooper's dependencies from the rest of your environment,
-and as a result, avoids dependency conflicts and breakage due to other packages.
-However, unlike `uv`, requires python to already be installed along with `pipx`.
-
-Required python packages: [`pipx`](https://pypa.github.io/pipx/) (can be installed using `pip install pipx` ).
+### Web Interface
 
 ```sh
-# Normal install
-# (follows the official releases on https://pypi.org/project/pymusiclooper/)
-pipx install pymusiclooper
+# From the project root
+python web/server.py
 
-# Alternative install
-# (follows the git repository; equivalent to a nightly release channel)
-pipx install git+https://github.com/arkrow/PyMusicLooper.git
-
-# Updating to new releases in either case can be done simply using:
-pipx upgrade pymusiclooper
+# Or with the venv
+.venv/bin/python web/server.py
 ```
 
-### Option 3: Installing using pip
+The server listens on port 8282 by default (configurable via `PORT` environment variable). Access the interface at `http://localhost:8282`.
 
-Traditional package installation method.
+### Systemd Service
 
-*Note: fragile compared to an installation using `uv` or `pipx`. PyMusicLooper may suddenly stop working if its dependencies were overwritten by another package (e.g. [issue #12](https://github.com/arkrow/PyMusicLooper/issues/12)).*
+A systemd unit file is provided at `weblooperscoop.service`:
 
 ```sh
-pip install pymusiclooper
+sudo cp weblooperscoop.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now weblooperscoop
 ```
 
-## Available Commands
+Access the interface at `http://localhost:8282`.
 
-![pymusiclooper --help](https://github.com/arkrow/PyMusicLooper/raw/master/img/pymusiclooper.svg)
+### Example CLI Session
 
-Note: further help and options can be found in each subcommand's help message (e.g. `pymusiclooper export-points --help`);
-all commands and their `--help` message can be seen in [CLI_README.md](https://github.com/arkrow/PyMusicLooper/blob/master/CLI_README.md)
+```
+$ loopscooper song.wav
 
-**Note**: using the interactive `-i` option is highly recommended, since the automatically chosen "best" loop point may not necessarily be the best one perceptually. As such, it is shown in all the examples. Can be disabled if the `-i` flag is omitted. Interactive mode is also available when batch processing.
+Detected BPM: 100.00
+Beat Duration: 0.600s
 
-## Example Usage
+Suggested Loop Lengths (4/4 time):
+  1 bar (4 beats):  2.400s
+  2 bars (8 beats): 4.800s
 
-### Play
+Enter loop duration window (min,max in seconds) [2.4,4.8]: 2,8
 
-```sh
-# Play the song on repeat with the best discovered loop point.
-pymusiclooper -i play --path "TRACK_NAME.mp3"
+Analyzing audio for loops (2-8s)...
 
+Discovered loop points (25/47 displayed)
 
-# Audio can also be loaded from any stream supported by yt-dlp, e.g. youtube
-# (also available for the `tag` and `split-audio` subcommands)
-pymusiclooper -i play --url "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  Index │ Loop Start │ Loop End  │ Length
+────────┼────────────┼───────────┼────────
+      0 │ 0:12.345   │ 0:16.789  │ 0:04.444
+      1 │ 0:24.567   │ 0:29.012  │ 0:04.445
+      ...
 
+Preview loop index (e.g., 0p, or "done" to skip): 0p
+Previewing loop #0... (Ctrl+C to stop)
 
-# Reads the loop metadata tags from an audio file and play it with the loop active
-# using the loop start and end specified in the file (must be stored as samples)
-pymusiclooper play-tagged --path "TRACK_NAME.mp3" --tag-names LOOP_START LOOP_END
+Preview loop index (e.g., 3p, or "done" to skip): done
+
+Re-detect loops? (enter min,max duration or n) [n]: n
+
+Enter loop indices to export (e.g., 0,1-3,5-8,10): 0,1-3,5-8,10
+
+Exporting 9 loop(s) to song-samples/...
+Exported song-01.wav (0:04.444)
+...
+
+Successfully exported 9 loop(s) to song-samples/
 ```
 
-### Export
+### Web Interface
 
-*Note: batch processing is available for all export subcommands. Simply specify a directory instead of a file as the path to be used.*
+1. **Drag & drop** or click to select an audio file
+2. Analysis runs automatically — the display shows filename, duration, BPM, and key
+3. Loop candidates are shown in a table with Type badges (1 Bar / 2 Bars / 4 Bars), sorted best-first, 8 per page — use **Prev / Next** to page through the rest
+4. **Click any row** to preview that loop (plays loop section only, no intro)
+5. **Click the same row again** to stop previewing
+6. **Check boxes** next to loops you want to export — selections are kept when you change pages
+7. Click **Export Selected** to download a ZIP of the chosen loops
+8. Click the **⏏ eject button** next to the display to load a different file without reloading the page
 
-```sh
-# Split the audio track into intro, loop and outro files.
-pymusiclooper -i split-audio --path "TRACK_NAME.ogg"
+### Output
 
-# Extend a track to an hour long (--extended-length accepts a number in seconds)
-pymusiclooper -i extend --path "TRACK_NAME.ogg" --extended-length 3600
+Loops are exported to `{basename}-samples/` next to the source file:
 
-# Extend a track to an hour long, with its outro and in OGG format
-pymusiclooper -i extend --path "TRACK_NAME.ogg" --extended-length 3600 --disable-fade-out --format "OGG"
-
-# Export the best/chosen loop points directly to the terminal as sample points
-pymusiclooper -i export-points --path "/path/to/track.wav"
-
-# Export all the discovered loop points directly to the terminal as sample points
-# Same output as interactive mode with loop values in samples, but without the formatting and pagination
-# Format: loop_start loop_end note_difference loudness_difference score
-pymusiclooper export-points --path "/path/to/track.wav" --alt-export-top -1
-
-# Add metadata tags of the best discovered loop points to a copy of the input audio file
-# (or all audio files in a directory, if a directory path is used instead)
-pymusiclooper -i tag --path "TRACK_NAME.mp3" --tag-names LOOP_START LOOP_END
-
-
-# Export the loop points (in samples) of all tracks in a particular directory to a loops.txt file
-# (compatible with https://github.com/libertyernie/LoopingAudioConverter/)
-# Note: each line in loop.txt follows the following format: {loop-start} {loop-end} {filename}
-pymusiclooper -i export-points --path "/path/to/dir/" --export-to txt
+```
+~/
+├── song.wav
+└── song-samples/
+    ├── song-01.wav
+    ├── song-02.wav
+    └── song-03.wav
 ```
 
-### Miscellaneous
+Each file contains only the loop section (loop_start to loop_end), without intro or outro.
 
-#### Finding more potential loops
+## API Endpoints (Web)
 
-```sh
-# If the detected loop points are unsatisfactory, the brute force option `--brute-force`
-# may yield better results.
-## NOTE: brute force mode checks the entire audio track instead of the detected beats.
-## This leads to much longer runtime (may take several minutes).
-## The program may appear frozen during this time while it is processing in the background.
-pymusiclooper -i export-points --path "TRACK_NAME.wav" --brute-force
-
-
-# By default, the program further filters the initial discovered loop points
-# according to internal criteria when there are >=100 possible pairs.
-# If that is undesirable, it can be disabled using the `--disable-pruning` flag, e.g.
-pymusiclooper -i export-points --path "TRACK_NAME.wav" --disable-pruning
-# Note: can be used with --brute-force if desired
-```
-
-#### Adjusting the loop length constraints
-
-*By default, the minimum loop duration is 35% of the track length (excluding trailing silence), and the maximum is unbounded.
-Alternative constraints can be specified using the options below.*
-
-```sh
-# If the loop is very long (or very short), a different minimum loop duration can be specified.
-## --min-duration-multiplier 0.85 implies that the loop is at least 85% of the track,
-## excluding trailing silence.
-pymusiclooper -i split-audio --path "TRACK_NAME.flac" --min-duration-multiplier 0.85
-
-# Alternatively, the loop length constraints can be specified in seconds
-pymusiclooper -i split-audio --path "TRACK_NAME.flac" --min-loop-duration 120 --max-loop-duration 150
-```
-
-#### Searching near a desired start/end loop point
-
-```sh
-# If a desired loop point is already known, and you would like to extract the best loop
-# positions in samples, the `--approx-loop-position` option can be used,
-# which searches with +/- 2 seconds of the point specified.
-# Best used interactively. Example using the `export-points` subcommand:
-pymusiclooper -i export-points --path "/path/to/track.mp3" --approx-loop-position 20 210
-## `--approx-loop-position 20 210` means the desired loop point starts around 20 seconds
-## and loops back around the 210 seconds mark.
-```
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | Main web interface |
+| `POST` | `/upload` | Upload audio file, run analysis, return BPM/key/loops |
+| `POST` | `/export` | Export selected loops as a zip download |
+| `GET` | `/download/<id>/<path>` | Download exported zip file |
+| `GET` | `/health` | Health check endpoint |
 
 ## Acknowledgement
 
-This project started out as a fork of [Nolan Nicholson](https://github.com/NolanNicholson)'s project [Looper](https://github.com/NolanNicholson/Looper/). Although at this point only a few lines of code remain from that project due to adopting a completely different approach and implementation; this project would not have been possible without their initial contribution.
+This project is a heavily modified fork of [arkrow's PyMusicLooper](https://github.com/arkrow/PyMusicLooper), which itself started as a fork of [Nolan Nicholson's Looper](https://github.com/NolanNicholson/Looper/). The core audio analysis approach (librosa beat tracking, chroma cross-correlation) was inherited from those projects.
 
-## Version History
+The web interface adds key detection using the Krumhansl-Schmuckler algorithm (1985), a widely-used method for tonal profile analysis implemented with zero new dependencies.
 
-Available at [CHANGELOG.md](CHANGELOG.md)
+## License
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=arkrow/PyMusicLooper&type=Date)](https://www.star-history.com/#arkrow/PyMusicLooper&Date)
+MIT

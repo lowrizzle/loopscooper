@@ -7,7 +7,7 @@ import threading
 import numpy as np
 from rich.progress import BarColumn, Progress, TextColumn
 
-from pymusiclooper.console import rich_console
+from loopscooper.console import rich_console
 
 # Lazy-load sounddevice: call `sd()` to return the module.
 # (We use this instead of `lazy-loader`, to get clearer error messages when

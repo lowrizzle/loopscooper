@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Web interface** — drag-and-drop audio upload, BPM/key detection, loop preview (click row to play/stop), export as ZIP
+- **Key detection** — Krumhansl-Schmuckler algorithm detects musical key (24 major/minor profiles)
+- **Dual interfaces** — CLI (`loopscooper`) and web (`http://localhost:8282`)
+- **Paginated loop candidates** — 8 per page, sorted best-first, with Prev/Next controls; export selections persist across pages
+- **Load a new file in place** — eject button next to the display resets the session without a page reload
+- `web/server.py` — Flask backend with `/upload`, `/export`, `/download`, `/health` endpoints
+- `web/index.html` — Main page with drag-drop zone, dot-matrix LCD info display, paginated loop table
+- `web/static/style.css` — Retro Akai/E-mu-style theme: beige chassis, grey control-panel module, red accents
+- `web/static/app.js` — Drag-drop, upload, Web Audio API preview, pagination, zip export
+- `weblooperscoop.service` — Systemd unit file for port 8282
+- `loopscooper/key.py` — Krumhansl-Schmuckler key detection module
+- `flask` dependency added to `pyproject.toml`
+
+### Changed
+
+- Loop candidates are now anchored to actually-detected beats an exact beat-count apart (8/16/4 beats for 2/4/1-bar), instead of a duration window — loops start and end on the beat rather than merely being close to the right length
+- Beat-grid construction uses a damped phase correction so it can't lock onto a doubled pulse (e.g. hi-hats) or get thrown off by a single syncopated hit, then does a second, non-propagating pass to snap each beat onto its true onset
+- 2-bar and 4-bar loops are surfaced by default; 1-bar loops only appear when they score ≥90%
+- Fallback detection strategies added (relaxed constraints, brute force) for short or atypical audio
+- Error messages now include BPM and audio duration for debugging
+- Export endpoint uses cached loop pairs from analysis to avoid re-running detection
+
+### Fixed
+
+- Web preview was using the decoded `AudioBuffer`'s (possibly resampled) sample rate to convert loop points instead of the source file's actual rate, causing loops to play back at the wrong length in the browser even though exported WAVs were correct
+- Clicking the same loop candidate twice before the previous preview finished decoding could start two overlapping, unstoppable playbacks; preview requests are now sequenced with a cancellation token and a single reused `AudioContext`
+
 ## [3.6.0] - 2025-11-01
 
 ### Changed
